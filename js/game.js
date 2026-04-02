@@ -62,7 +62,7 @@ const ACTION_SPEECH = {
   hungry:  ["Momma gimme milk", "I hungy", "bro. FOOD."],
   thirsty: ["*chapped lips smacking*", "Where my Coke ZERO???"],
   sleepy:  ["can't... keep... eyes... open", "just one more minute of scrolling...", "I swear I'll go to bed early tonight like... 5 am?"],
-  idle:    ["...", "staring at the void", "Im not real", "I should see my gf", "IM SO BROKE"],
+  idle:    ["...", "staring at the void", "Im not real", "I should see my gf", "IM SO BROKE", "I have no feelings"],
 };
 
 // Cooldown in ms per action (button is greyed out during cooldown)

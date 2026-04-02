@@ -624,9 +624,9 @@ function initZoneHandlers() {
 
 // ── Ambient Speech ─────────────────────────────────────────────
 const AMBIENT_LINES = [
-  "...still no job offers", "i should refactor this", "O(n^2) is fine, right?",
-  "Stack Overflow is a co-author", "git blame: it was me", "undefined... of course",
-  "please just work", "one more energy drink", "need more RAM",
+  "...why no one want me!?", "industry standard", "you know he right about that one?",
+  "make it dynamic", "chatgpt make me rich money app no errors fast!", "huh",
+  "Im so stupid", "I should buy some car parts", "I miss my gf",
 ];
 
 function scheduleAmbientSpeech() {

@@ -29,7 +29,7 @@ const ACTION_BOOST = {
   gaming:  { mood:   +25, energy: -8  },   // primary mood booster
   workout: { energy: -20, mood:  +20, hunger: -10 },
   sleep:   { energy: +40, mood:  +5  },
-  scared:  { mood:  -30, energy: -5  },    // job app is scary
+  scared:  { mood:  -30, energy: -5  }, 
 };
 
 // Sprite states → file paths in assets/sprites/
@@ -39,7 +39,7 @@ const SPRITES = {
   eat:     'assets/sprites/EJ_eat.png',
   drink:   'assets/sprites/EJ_drink.png',
   code:    'assets/sprites/EJ_code.png',
-  gaming:  'assets/sprites/EJ_gaming.png',   // used for gaming action at the PC
+  gaming:  'assets/sprites/EJ_gaming.png', 
   workout: 'assets/sprites/EJ_workout.png',
   sleep:   'assets/sprites/EJ_sleep.png',
   sleepy:  'assets/sprites/EJ_sleepy.png',
@@ -485,7 +485,6 @@ const ActionSystem = {
     const durations = { eat:3000, drink:3000, code:5000, gaming:5000, workout:4000, sleep:5000, scared:3000 };
     const dur = durations[action] || 2500;
 
-    // gaming uses EJ_gaming.png; code uses EJ_code.png — both are separate sprites
     PetAnimator.playAction(action, dur);
     PetAnimator.speak(line, dur - 300);
 

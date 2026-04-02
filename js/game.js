@@ -52,8 +52,8 @@ const SPRITES = {
 };
 
 const ACTION_SPEECH = {
-  eat:     ["om nom nom", "finally, real food", "Reese's Puffs again", "pizza. always pizza."],
-  drink:   ["cracking a cold one", "caffeine loading...", "I need this", "hydration moment"],
+  eat:     ["om nom nom", "finally, real food", "Reese's Puffs Reese's Puffs Eat em up eat em up", "Im so chud coded"],
+  drink:   ["cracking a cold one", "caffeine loading...", "I need this", "ooh it burns so good"],
   code:    ["it works??", "undefined :(", "just one more bug", "CTRL+Z CTRL+Z CTRL+Z"],
   gaming:  ["one more game...", "LETS GOOO", "carried that match", "rank grind never stops", "ELO go brrr"],
   workout: ["one more rep!!", "why am I doing this", "gains for the grind"],

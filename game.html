@@ -43,10 +43,10 @@
   <!-- MAIN GAME WORLD -->
   <main class="game-world" id="gameWorld">
 
-    <!-- Background image fills the room -->
+    <!-- Background image fills the room (assets/sprites/BG.png) -->
     <div class="room-bg"></div>
 
-    <!-- Animated window overlay (sits on top of background window area) -->
+    <!-- Animated window overlay (positioned over the window in BG.png) -->
     <div class="window-overlay">
       <div class="window-sky">
         <div class="cloud c1"></div>
@@ -56,23 +56,20 @@
       </div>
     </div>
 
-    <!-- Fridge interaction zone (left side) — pet walks here to eat -->
+    <!-- Fridge zone — pet walks here for eat action -->
     <div class="fridge-zone" id="fridgeZone" title="Open Fridge">
       <div class="fridge-glow"></div>
-      <!-- Pixel animated indicator -->
       <div class="interact-hint" id="fridgeHint">EAT</div>
     </div>
 
-    <!-- PC desk interaction zone (right side) — pet walks here to code/game -->
+    <!-- PC zone — pet walks here for code AND gaming actions -->
     <div class="pc-zone" id="pcZone" title="Use PC">
       <div class="pc-glow"></div>
-      <div class="interact-hint" id="pcHint">CODE</div>
+      <div class="interact-hint" id="pcHint">PC</div>
     </div>
 
-    <!-- Toast notification -->
     <div class="toast" id="toast"></div>
 
-    <!-- Speech bubble (floating above pet) -->
     <div class="speech-bubble-game" id="gameSpeech">
       <span id="gameSpeechText">...</span>
     </div>
@@ -89,25 +86,15 @@
       <div class="pet-shadow" id="petShadow"></div>
     </div>
 
-    <!-- Zzz floating effect -->
-    <div class="zzz-effect" id="zzzEffect">
-      <span>z</span><span>z</span><span>Z</span>
-    </div>
-
-    <!-- Sweat drops -->
+    <div class="zzz-effect" id="zzzEffect"><span>z</span><span>z</span><span>Z</span></div>
     <div class="sweat-effect" id="sweatEffect">💦</div>
+    <div class="hearts-effect" id="heartsEffect"><span>💙</span><span>💙</span><span>💙</span></div>
 
-    <!-- Hearts -->
-    <div class="hearts-effect" id="heartsEffect">
-      <span>💙</span><span>💙</span><span>💙</span>
-    </div>
-
-    <!-- Pixel ambient particles (replaces emoji decorations) -->
     <canvas class="pixel-particles" id="pixelCanvas"></canvas>
 
   </main>
 
-  <!-- BOTTOM ACTION BUTTONS -->
+  <!-- BOTTOM ACTION BUTTONS — 7 buttons, job app is wider -->
   <footer class="action-bar">
     <div class="action-grid">
 
@@ -126,6 +113,12 @@
         <span class="btn-label">CODE</span>
       </button>
 
+      <!-- Gaming: separate from code, improves mood -->
+      <button class="action-btn gaming-btn" id="btnGame" onclick="petAction('gaming')">
+        <span class="btn-icon">🎮</span>
+        <span class="btn-label">GAME</span>
+      </button>
+
       <button class="action-btn" id="btnWorkout" onclick="petAction('workout')">
         <span class="btn-icon">🏋️</span>
         <span class="btn-label">WORKOUT</span>
@@ -136,7 +129,8 @@
         <span class="btn-label">SLEEP</span>
       </button>
 
-      <button class="action-btn danger-btn" id="btnScare" onclick="petAction('scared')">
+      <!-- Danger: job app — wider and scarier -->
+      <button class="action-btn danger-btn job-btn" id="btnScare" onclick="petAction('scared')">
         <span class="btn-icon">📋</span>
         <span class="btn-label">JOB APP</span>
       </button>
@@ -144,7 +138,7 @@
     </div>
   </footer>
 
-  <!-- STATUS OVERLAY (game over / sleep screen) -->
+  <!-- STATUS OVERLAY -->
   <div class="status-overlay" id="statusOverlay" style="display:none;">
     <div class="overlay-content">
       <p id="overlayMessage">💤 CS Student is sleeping...</p>

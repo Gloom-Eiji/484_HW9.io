@@ -1,52 +1,45 @@
 /**
- * game.js
- * My Little Computer Science Amateur
- * Core Tomodachi-style simulation logic.
+ * game.js — My Little Computer Science Amateur
  *
- * ─── Architecture ────────────────────────────────────────────
- *  PetState        – stat values (hunger, thirst, energy, mood)
- *  PetAnimator     – sprite swaps and visual effects
- *  PetWalker       – autonomous + directed walking movement
- *  DragHandler     – click-drag-drop interaction
- *  HUD             – updates stat bars and clock
- *  ActionSystem    – button presses, walk-to-destination logic
- *  PixelParticles  – ambient pixel canvas animation
- *  Game            – main init and tick loop
- * ─────────────────────────────────────────────────────────────
+ * Architecture:
+ *   AudioSystem    – plays assets/audio/EJ_audio_<key>.mp3 per action
+ *   PetState       – stat values (hunger, thirst, energy, mood) + tick/drain
+ *   HUD            – syncs stat bars and clock to PetState
+ *   PetAnimator    – sprite cross-fades, speech bubble, effect overlays
+ *   PetWalker      – autonomous roaming + directed walk-to-destination
+ *   DragHandler    – pointer drag/drop interaction
+ *   ActionSystem   – button → walk → execute; manages cooldowns
+ *   PixelParticles – ambient canvas animation (symbols + dots floating up)
+ *   Game           – DOMContentLoaded init, main tick loop
  */
 
 'use strict';
 
-// ============================================================
-// CONSTANTS
-// ============================================================
+// ── Constants ──────────────────────────────────────────────────
 
 const TICK_MS = 3000;
 
-const DRAIN = {
-  hunger:  1.5,
-  thirst:  2.0,
-  energy:  1.0,
-  mood:    0.8,
-};
+const DRAIN = { hunger: 1.5, thirst: 2.0, energy: 1.0, mood: 0.8 };
 
+// gaming is separate from code: big mood boost, small energy cost
 const ACTION_BOOST = {
-  eat:     { hunger: +30, mood: +5  },
-  drink:   { thirst: +30, mood: +5  },
-  code:    { mood: +15, energy: -10 },
-  workout: { energy: -20, mood: +20, hunger: -10 },
-  sleep:   { energy: +40, mood: +5  },
-  // Job app: DECREASES mood significantly (scary!)
-  scared:  { mood: -30, energy: -5  },
+  eat:     { hunger: +30, mood:  +5  },
+  drink:   { thirst: +30, mood:  +5  },
+  code:    { mood:   +10, energy: -12 },
+  gaming:  { mood:   +25, energy: -8  },   // primary mood booster
+  workout: { energy: -20, mood:  +20, hunger: -10 },
+  sleep:   { energy: +40, mood:  +5  },
+  scared:  { mood:  -30, energy: -5  },    // job app is scary
 };
 
+// Sprite states → file paths in assets/sprites/
 const SPRITES = {
   idle:    'assets/sprites/EJ_idle.png',
   walk:    'assets/sprites/EJ_walk.png',
   eat:     'assets/sprites/EJ_eat.png',
   drink:   'assets/sprites/EJ_drink.png',
   code:    'assets/sprites/EJ_code.png',
-  gaming:  'assets/sprites/EJ_gaming.png',   // Used when sitting at PC
+  gaming:  'assets/sprites/EJ_gaming.png',   // used for gaming action at the PC
   workout: 'assets/sprites/EJ_workout.png',
   sleep:   'assets/sprites/EJ_sleep.png',
   sleepy:  'assets/sprites/EJ_sleepy.png',
@@ -61,40 +54,65 @@ const SPRITES = {
 const ACTION_SPEECH = {
   eat:     ["om nom nom", "finally, real food", "Reese's Puffs again", "pizza. always pizza."],
   drink:   ["cracking a cold one", "caffeine loading...", "I need this", "hydration moment"],
-  code:    ["it works??", "undefined :(", "just one more bug", "CTRL+Z CTRL+Z CTRL+Z", "segfault again"],
-  gaming:  ["one more game...", "LETS GOOO", "carried that match", "rank grind never stops"],
-  workout: ["one more rep!!", "why am I doing this", "gains for the grind", "I hate this. same time tmr"],
-  sleep:   ["*snores in Python*", "finally...", "zzz zzz zzz", "5 more minutes..."],
-  scared:  ["NOT THE JOB APP", "I need more internships", "my GPA... gone", "BEHAVIORAL QUESTIONS NOOO"],
+  code:    ["it works??", "undefined :(", "just one more bug", "CTRL+Z CTRL+Z CTRL+Z"],
+  gaming:  ["one more game...", "LETS GOOO", "carried that match", "rank grind never stops", "ELO go brrr"],
+  workout: ["one more rep!!", "why am I doing this", "gains for the grind"],
+  sleep:   ["*snores in Python*", "finally...", "zzz zzz zzz"],
+  scared:  ["NOT THE JOB APP", "I need more internships", "BEHAVIORAL QUESTIONS NOOO"],
   hungry:  ["feed me or I segfault", "my stomach is O(n) complaining", "bro. FOOD."],
-  thirsty: ["dehydrated dev detected", "no more coffee??", "water?? what's that"],
-  sleepy:  ["can't... keep... eyes... open", "just one more commit", "zzz... wait no"],
+  thirsty: ["dehydrated dev detected", "no more coffee??"],
+  sleepy:  ["can't... keep... eyes... open", "just one more commit"],
   idle:    ["...", "staring at the void", "rubber duck debugging", "git blame myself"],
 };
 
+// Cooldown in ms per action (button is greyed out during cooldown)
 const COOLDOWNS = {
   eat:     4000,
   drink:   4000,
   code:    6000,
+  gaming:  5000,
   workout: 8000,
   sleep:   10000,
   scared:  3000,
 };
 
-// ============================================================
-// PET STATE
-// ============================================================
+// ── Audio System ───────────────────────────────────────────────
+// Maps action keys to assets/audio/EJ_audio_<name>.mp3
+// Errors are caught silently so missing files don't crash the game.
+const AudioSystem = {
+  // key → filename stem (without path/extension)
+  FILES: {
+    eat:     'EJ_audio eat',
+    drink:   'EJ_audio drink',
+    code:    'EJ_audio code',
+    gaming:  'EJ_audio gaming',
+    workout: 'EJ_audio workout',
+    sleep:   'EJ_audio sleep',
+    scared:  'EJ_audio JobApp',
+    hungry:  'EJ_audio hungry',
+    thirsty: 'EJ_audio thirsty',
+    sleepy:  'EJ_audio sleepy',
+    pickup:  'EJ_audio pickup',
+  },
+
+  play(key) {
+    const stem = this.FILES[key];
+    if (!stem) return;
+    try {
+      const audio = new Audio(`assets/audio/${stem}.mp3`);
+      audio.volume = 0.6;
+      audio.play().catch(() => {}); // ignore autoplay policy errors
+    } catch (_) {}
+  },
+};
+
+// ── Pet State ──────────────────────────────────────────────────
 const PetState = {
-  hunger:  80,
-  thirst:  80,
-  energy:  80,
-  mood:    80,
+  hunger: 80, thirst: 80, energy: 80, mood: 80,
 
   apply(deltas) {
-    for (const [key, val] of Object.entries(deltas)) {
-      if (key in this) {
-        this[key] = Math.max(0, Math.min(100, this[key] + val));
-      }
+    for (const [k, v] of Object.entries(deltas)) {
+      if (k in this) this[k] = Math.max(0, Math.min(100, this[k] + v));
     }
   },
 
@@ -109,16 +127,13 @@ const PetState = {
     if (this.hunger < 20) return 'hungry';
     if (this.thirst < 20) return 'thirsty';
     if (this.energy < 20) return 'sleepy';
-    if (this.mood   < 20) return 'sad';
     return null;
   },
 };
 
-// ============================================================
-// HUD
-// ============================================================
+// ── HUD ────────────────────────────────────────────────────────
 const HUD = {
-  bars: {
+  bars:   {
     hunger: document.getElementById('hungerBar'),
     thirst: document.getElementById('thirstBar'),
     energy: document.getElementById('energyBar'),
@@ -134,27 +149,22 @@ const HUD = {
   startTime: Date.now(),
 
   update() {
-    ['hunger', 'thirst', 'energy', 'mood'].forEach(stat => {
-      const val   = PetState[stat];
-      const bar   = this.bars[stat];
-      const block = this.blocks[stat];
-      if (bar)   bar.style.width = val + '%';
-      if (block) block.classList.toggle('critical', val < 25);
+    ['hunger','thirst','energy','mood'].forEach(s => {
+      const val = PetState[s];
+      if (this.bars[s])   this.bars[s].style.width = val + '%';
+      if (this.blocks[s]) this.blocks[s].classList.toggle('critical', val < 25);
     });
   },
 
   tickClock() {
-    const elapsed = Math.floor((Date.now() - this.startTime) / 1000);
-    const m = Math.floor(elapsed / 60).toString().padStart(2, '0');
-    const s = (elapsed % 60).toString().padStart(2, '0');
+    const e = Math.floor((Date.now() - this.startTime) / 1000);
+    const m = Math.floor(e / 60).toString().padStart(2,'0');
+    const s = (e % 60).toString().padStart(2,'0');
     if (this.clockEl) this.clockEl.textContent = `${m}:${s}`;
   },
 };
 
-// ============================================================
-// PET ANIMATOR
-// Handles sprite swaps, speech bubbles, and particle effects.
-// ============================================================
+// ── Pet Animator ───────────────────────────────────────────────
 const PetAnimator = {
   spriteEl:     document.getElementById('petSprite'),
   speechEl:     document.getElementById('gameSpeech'),
@@ -163,21 +173,15 @@ const PetAnimator = {
   sweatEl:      document.getElementById('sweatEffect'),
   heartsEl:     document.getElementById('heartsEffect'),
   toastEl:      document.getElementById('toast'),
-
   currentState: 'idle',
   speechTimer:  null,
   stateTimer:   null,
 
-  /**
-   * setSprite – cross-fades to the given sprite state.
-   * All PNG images must have transparent backgrounds — we do NOT
-   * apply any background color here; we rely on CSS background:transparent.
-   */
+  // Cross-fade to new sprite state. background:transparent is enforced in CSS.
   setSprite(state) {
     const src = SPRITES[state] || SPRITES.idle;
     if (!this.spriteEl) return;
     this.currentState = state;
-
     this.spriteEl.style.opacity = '0';
     setTimeout(() => {
       this.spriteEl.src = src;
@@ -192,9 +196,7 @@ const PetAnimator = {
     this.speechTextEl.textContent = text;
     this._positionSpeechBubble();
     this.speechEl.classList.add('visible');
-    this.speechTimer = setTimeout(() => {
-      this.speechEl.classList.remove('visible');
-    }, duration);
+    this.speechTimer = setTimeout(() => this.speechEl.classList.remove('visible'), duration);
   },
 
   _positionSpeechBubble() {
@@ -202,38 +204,31 @@ const PetAnimator = {
     const world  = document.getElementById('gameWorld');
     const bubble = this.speechEl;
     if (!pet || !world || !bubble) return;
-
-    const petRect   = pet.getBoundingClientRect();
-    const worldRect = world.getBoundingClientRect();
-
-    const left = petRect.left - worldRect.left + petRect.width / 2 - 20;
-    const top  = petRect.top  - worldRect.top  - 70;
-
-    bubble.style.left = Math.max(8, Math.min(left, worldRect.width - 200)) + 'px';
-    bubble.style.top  = Math.max(8, top) + 'px';
+    const pr = pet.getBoundingClientRect();
+    const wr = world.getBoundingClientRect();
+    bubble.style.left = Math.max(8, Math.min(pr.left - wr.left + pr.width / 2 - 20, wr.width - 200)) + 'px';
+    bubble.style.top  = Math.max(8, pr.top - wr.top - 70) + 'px';
   },
 
-  showToast(message) {
+  showToast(msg) {
     if (!this.toastEl) return;
-    this.toastEl.textContent = message;
+    this.toastEl.textContent = msg;
     this.toastEl.classList.add('show');
     setTimeout(() => this.toastEl.classList.remove('show'), 2200);
   },
 
-  /**
-   * playAction – pauses walking, sets sprite, then reverts after duration.
-   */
+  // Pause walker, play action sprite, then resume after duration
   playAction(state, duration = 2500) {
     clearTimeout(this.stateTimer);
     this.setSprite(state);
     PetWalker.pause();
-
     this.stateTimer = setTimeout(() => {
       PetWalker.resume();
       this.autoSprite();
     }, duration);
   },
 
+  // Auto-pick the correct idle/urgent sprite
   autoSprite() {
     if (DragHandler.isDragging) return;
     const need = PetState.urgentNeed();
@@ -241,6 +236,11 @@ const PetAnimator = {
     if (need === 'thirsty') { this.setSprite('thirsty'); return; }
     if (need === 'sleepy')  { this.setSprite('sleepy');  return; }
     this.setSprite(PetWalker.isWalking ? 'walk' : 'idle');
+  },
+
+  randomSpeech(category) {
+    const lines = ACTION_SPEECH[category] || ACTION_SPEECH.idle;
+    return lines[Math.floor(Math.random() * lines.length)];
   },
 
   showZzz(visible) {
@@ -270,25 +270,18 @@ const PetAnimator = {
     const pet   = document.getElementById('petContainer');
     const world = document.getElementById('gameWorld');
     if (!pet || !world || !el) return;
-
-    const petRect   = pet.getBoundingClientRect();
-    const worldRect = world.getBoundingClientRect();
-
-    el.style.left = (petRect.left - worldRect.left + petRect.width / 2 + 10) + 'px';
-    el.style.top  = (petRect.top  - worldRect.top  + yOffset) + 'px';
-  },
-
-  randomSpeech(category) {
-    const lines = ACTION_SPEECH[category] || ACTION_SPEECH.idle;
-    return lines[Math.floor(Math.random() * lines.length)];
+    const pr = pet.getBoundingClientRect();
+    const wr = world.getBoundingClientRect();
+    el.style.left = (pr.left - wr.left + pr.width / 2 + 10) + 'px';
+    el.style.top  = (pr.top  - wr.top  + yOffset) + 'px';
   },
 };
 
-// ============================================================
-// PET WALKER
-// Handles both autonomous roaming AND directed walks to a target
-// (fridge on left, PC on right) before performing an action.
-// ============================================================
+// ── Pet Walker ─────────────────────────────────────────────────
+// Autonomous roaming + directed walk-to-destination before actions.
+// eat  → fridge  (~8% of world width, left)
+// code → PC desk (~72% of world width, right)
+// gaming → PC desk (same destination as code)
 const PetWalker = {
   petEl:       document.getElementById('petContainer'),
   worldEl:     document.getElementById('gameWorld'),
@@ -296,26 +289,21 @@ const PetWalker = {
   isPaused:    false,
   targetX:     null,
   currentX:    null,
-  walkSpeed:   1.8,     // px per animation frame (slightly faster than before)
+  walkSpeed:   1.8,
   walkInterval: null,
-  pauseTimer:  null,
   walkTimer:   null,
-
-  /** Callback to run when the directed walk reaches its destination. */
-  onArrival:   null,
+  onArrival:   null,  // callback fired when directed walk reaches its destination
 
   init() {
     if (!this.petEl || !this.worldEl) return;
-    const bounds = this._bounds();
-    this.currentX = bounds.min + (bounds.max - bounds.min) / 2;
+    const b = this._bounds();
+    this.currentX = b.min + (b.max - b.min) / 2;
     this._setX(this.currentX);
     this._scheduleNextWalk();
   },
 
   _bounds() {
-    const world = this.worldEl.clientWidth;
-    // Keep away from the very edges so the pet doesn't overlap interaction zones
-    return { min: 80, max: world - 120 };
+    return { min: 80, max: this.worldEl.clientWidth - 120 };
   },
 
   _setX(x) {
@@ -326,8 +314,7 @@ const PetWalker = {
 
   _scheduleNextWalk() {
     if (this.isPaused) return;
-    const wait = 3000 + Math.random() * 5000;
-    this.walkTimer = setTimeout(() => this._startWalk(), wait);
+    this.walkTimer = setTimeout(() => this._startWalk(), 3000 + Math.random() * 5000);
   },
 
   _startWalk(targetOverride = null) {
@@ -335,40 +322,26 @@ const PetWalker = {
       if (!targetOverride) this._scheduleNextWalk();
       return;
     }
-
-    const bounds = this._bounds();
-
-    // Use override target (directed) or pick a random autonomous destination
+    const b = this._bounds();
     this.targetX = targetOverride !== null
       ? targetOverride
-      : bounds.min + Math.random() * (bounds.max - bounds.min);
-
+      : b.min + Math.random() * (b.max - b.min);
     this.isWalking = true;
-
-    const goingLeft = this.targetX < this.currentX;
-    this.petEl.classList.toggle('facing-left', goingLeft);
+    this.petEl.classList.toggle('facing-left', this.targetX < this.currentX);
     this.petEl.classList.add('walking');
     PetAnimator.setSprite('walk');
-
     this._stepLoop();
   },
 
   _stepLoop() {
-    if (this.isPaused || DragHandler.isDragging) {
-      this._stopWalk(false);
-      return;
-    }
-
+    if (this.isPaused || DragHandler.isDragging) { this._stopWalk(false); return; }
     const diff = this.targetX - this.currentX;
     if (Math.abs(diff) < this.walkSpeed + 1) {
-      // Arrived at destination
       this._setX(this.targetX);
       this._stopWalk(true);
       return;
     }
-
-    const dir = diff > 0 ? 1 : -1;
-    this._setX(this.currentX + dir * this.walkSpeed);
+    this._setX(this.currentX + (diff > 0 ? 1 : -1) * this.walkSpeed);
     this.walkInterval = requestAnimationFrame(() => this._stepLoop());
   },
 
@@ -376,33 +349,22 @@ const PetWalker = {
     cancelAnimationFrame(this.walkInterval);
     this.isWalking = false;
     this.petEl.classList.remove('walking', 'facing-left');
-
     if (arrived && typeof this.onArrival === 'function') {
-      // Fire the arrival callback then clear it
       const cb = this.onArrival;
       this.onArrival = null;
       cb();
-      return; // Don't schedule next autonomous walk yet (action will call resume)
+      return;
     }
-
-    if (!this.isPaused) {
-      PetAnimator.autoSprite();
-      this._scheduleNextWalk();
-    }
+    if (!this.isPaused) { PetAnimator.autoSprite(); this._scheduleNextWalk(); }
   },
 
-  /**
-   * walkTo – directed walk: pet moves to targetX then fires callback.
-   * @param {number} targetX - absolute pixel x in game world
-   * @param {Function} callback - runs on arrival
-   */
+  // Directed walk: move to targetX then fire callback
   walkTo(targetX, callback) {
-    // Cancel any in-progress autonomous walk
     clearTimeout(this.walkTimer);
     cancelAnimationFrame(this.walkInterval);
-    this.isWalking   = false;
-    this.isPaused    = false;
-    this.onArrival   = callback;
+    this.isWalking  = false;
+    this.isPaused   = false;
+    this.onArrival  = callback;
     this._startWalk(targetX);
   },
 
@@ -410,9 +372,9 @@ const PetWalker = {
     this.isPaused = true;
     clearTimeout(this.walkTimer);
     cancelAnimationFrame(this.walkInterval);
-    this.isWalking = false;
+    this.isWalking  = false;
+    this.onArrival  = null;
     this.petEl.classList.remove('walking');
-    this.onArrival = null; // Cancel any pending directed walk
   },
 
   resume() {
@@ -422,76 +384,64 @@ const PetWalker = {
   },
 };
 
-// ============================================================
-// DRAG HANDLER
-// ============================================================
+// ── Drag Handler ───────────────────────────────────────────────
 const DragHandler = {
-  petEl:     document.getElementById('petContainer'),
-  worldEl:   document.getElementById('gameWorld'),
+  petEl:      document.getElementById('petContainer'),
+  worldEl:    document.getElementById('gameWorld'),
   isDragging: false,
-  offsetX:   0,
-  offsetY:   0,
+  offsetX:    0,
+  offsetY:    0,
   dropBounce: null,
 
   init() {
-    if (!this.petEl || !this.worldEl) return;
-    this.petEl.addEventListener('pointerdown', (e) => this._onDown(e));
-    window.addEventListener('pointermove',    (e) => this._onMove(e));
-    window.addEventListener('pointerup',      (e) => this._onUp(e));
+    if (!this.petEl) return;
+    this.petEl.addEventListener('pointerdown', e => this._onDown(e));
+    window.addEventListener('pointermove',    e => this._onMove(e));
+    window.addEventListener('pointerup',      e => this._onUp(e));
   },
 
   _onDown(e) {
     e.preventDefault();
     if (this.dropBounce) return;
-
     this.isDragging = true;
     PetWalker.pause();
-
-    const rect    = this.petEl.getBoundingClientRect();
-    this.offsetX  = e.clientX - rect.left  - rect.width  / 2;
-    this.offsetY  = e.clientY - rect.top   - rect.height / 2;
-
+    const r = this.petEl.getBoundingClientRect();
+    this.offsetX = e.clientX - r.left  - r.width  / 2;
+    this.offsetY = e.clientY - r.top   - r.height / 2;
     this.petEl.classList.add('dragging', 'held');
     PetAnimator.setSprite('pickup');
+    AudioSystem.play('pickup');
     PetAnimator.speak("hey! put me down!!");
   },
 
   _onMove(e) {
     if (!this.isDragging) return;
-    const worldRect = this.worldEl.getBoundingClientRect();
-    const petRect   = this.petEl.getBoundingClientRect();
-
-    let newLeft = (e.clientX - worldRect.left) - this.offsetX - petRect.width  / 2;
-    let newTop  = (e.clientY - worldRect.top)  - this.offsetY - petRect.height / 2;
-
-    newLeft = Math.max(0, Math.min(newLeft, worldRect.width  - petRect.width));
-    newTop  = Math.max(0, Math.min(newTop,  worldRect.height - petRect.height));
-
-    this.petEl.style.left   = newLeft + 'px';
-    this.petEl.style.top    = newTop  + 'px';
+    const wr = this.worldEl.getBoundingClientRect();
+    const pr = this.petEl.getBoundingClientRect();
+    let l = (e.clientX - wr.left) - this.offsetX - pr.width  / 2;
+    let t = (e.clientY - wr.top)  - this.offsetY - pr.height / 2;
+    l = Math.max(0, Math.min(l, wr.width  - pr.width));
+    t = Math.max(0, Math.min(t, wr.height - pr.height));
+    this.petEl.style.left   = l + 'px';
+    this.petEl.style.top    = t + 'px';
     this.petEl.style.bottom = 'auto';
     this.petEl.style.transform = 'none';
-
-    PetWalker.currentX = newLeft;
+    PetWalker.currentX = l;
   },
 
-  _onUp(e) {
+  _onUp() {
     if (!this.isDragging) return;
     this.isDragging = false;
     this.petEl.classList.remove('dragging', 'held');
-
     PetAnimator.setSprite('fall');
     PetAnimator.speak("oof", 1800);
-
     this.dropBounce = setTimeout(() => {
-      const currentLeft = parseFloat(this.petEl.style.left) || 0;
+      const l = parseFloat(this.petEl.style.left) || 0;
       this.petEl.style.top    = '';
       this.petEl.style.bottom = '6px';
-      this.petEl.style.left   = currentLeft + 'px';
-
-      PetWalker.currentX = currentLeft;
+      this.petEl.style.left   = l + 'px';
+      PetWalker.currentX = l;
       PetAnimator.setSprite('ground');
-
       setTimeout(() => {
         this.dropBounce = null;
         PetAnimator.autoSprite();
@@ -501,97 +451,73 @@ const DragHandler = {
   },
 };
 
-// ============================================================
-// ACTION SYSTEM
-// Buttons now make the pet WALK to the appropriate location
-// before performing the action.
-//
+// ── Action System ──────────────────────────────────────────────
 // Destination logic:
-//   eat  → fridge on left  (~8% of world width)
-//   code → PC on right     (~78% of world width)
-//   All others → perform in-place
-// ============================================================
+//   eat    → fridge  (left, ~8% world width)
+//   code   → PC desk (right, ~72% world width)
+//   gaming → PC desk (same as code — both actions use the PC)
+//   all others → in-place
 const ActionSystem = {
   cooldowns: {},
 
-  /**
-   * trigger – walks pet to the correct location then executes the action.
-   * @param {string} action
-   */
   trigger(action) {
     if (this.cooldowns[action]) return;
-
     const worldWidth = document.getElementById('gameWorld')?.clientWidth || 800;
 
-    // Determine if this action needs a walk-to-location first
     if (action === 'eat') {
-      // Walk to fridge (left side of room, ~8% in)
-      const fridgeX = Math.round(worldWidth * 0.08);
       PetAnimator.showToast('WALKING TO FRIDGE...');
-      PetWalker.walkTo(fridgeX, () => this._executeAction(action));
-    } else if (action === 'code') {
-      // Walk to PC desk (right side of room, ~72% in)
-      const pcX = Math.round(worldWidth * 0.72);
+      PetWalker.walkTo(Math.round(worldWidth * 0.08), () => this._execute(action));
+    } else if (action === 'code' || action === 'gaming') {
       PetAnimator.showToast('WALKING TO PC...');
-      PetWalker.walkTo(pcX, () => this._executeAction(action));
+      PetWalker.walkTo(Math.round(worldWidth * 0.72), () => this._execute(action));
     } else {
-      // Perform in-place (drink, workout, sleep, scared)
-      this._executeAction(action);
+      this._execute(action);
     }
   },
 
-  /**
-   * _executeAction – applies stat changes and runs the animation.
-   * Called after walking is complete (or immediately for in-place actions).
-   * @param {string} action
-   * @private
-   */
-  _executeAction(action) {
-    // Apply stat boosts/penalties
+  _execute(action) {
     const boost = ACTION_BOOST[action];
     if (boost) PetState.apply(boost);
 
-    // Pick speech line
-    const speechCategory = action === 'code' ? 'gaming' : action;
-    const line = PetAnimator.randomSpeech(speechCategory);
+    AudioSystem.play(action);
 
-    // Duration for each action animation
-    const durations = { eat: 3000, drink: 3000, code: 5000, workout: 4000, sleep: 5000, scared: 3000 };
+    const line = PetAnimator.randomSpeech(action);
+    const durations = { eat:3000, drink:3000, code:5000, gaming:5000, workout:4000, sleep:5000, scared:3000 };
     const dur = durations[action] || 2500;
 
-    // Use EJ_gaming sprite when at the PC
-    const spriteState = action === 'code' ? 'gaming' : action;
-    PetAnimator.playAction(spriteState, dur);
+    // gaming uses EJ_gaming.png; code uses EJ_code.png — both are separate sprites
+    PetAnimator.playAction(action, dur);
     PetAnimator.speak(line, dur - 300);
 
-    // Special visual effects
-    if (action === 'sleep')   PetAnimator.showZzz(true);
-    if (action === 'scared')  PetAnimator.showSweat(true);
-    if (action === 'eat' || action === 'drink') PetAnimator.showHearts();
+    if (action === 'sleep')                       PetAnimator.showZzz(true);
+    if (action === 'scared')                      PetAnimator.showSweat(true);
+    if (action === 'eat' || action === 'drink')   PetAnimator.showHearts();
 
     // Toast feedback
-    const toastMessages = {
+    const toasts = {
       eat:     'NOM NOM NOM',
       drink:   'HYDRATED +30',
-      code:    'GAMING SESSION...',
+      code:    'CODING...',
+      gaming:  'GAMING SESSION 🎮  MOOD++',
       workout: 'GAINS UNLOCKED',
       sleep:   'RESTING...',
       scared:  'JOB APPLICATION TERROR  MOOD--',
     };
-    PetAnimator.showToast(toastMessages[action] || 'OK');
+    PetAnimator.showToast(toasts[action] || 'OK');
 
-    // Flash the button
-    const btnMap = { eat: 'btnFeed', drink: 'btnDrink', code: 'btnCode', workout: 'btnWorkout', sleep: 'btnSleep', scared: 'btnScare' };
+    // Flash the button that triggered this action
+    const btnMap = {
+      eat:'btnFeed', drink:'btnDrink', code:'btnCode', gaming:'btnGame',
+      workout:'btnWorkout', sleep:'btnSleep', scared:'btnScare',
+    };
     const btnEl = document.getElementById(btnMap[action]);
     if (btnEl) {
       btnEl.classList.add('active-glow');
       setTimeout(() => btnEl.classList.remove('active-glow'), 600);
     }
 
-    // Start cooldown
     const cd = COOLDOWNS[action] || 3000;
     this._startCooldown(action, cd, btnEl);
-
     HUD.update();
   },
 
@@ -604,68 +530,48 @@ const ActionSystem = {
   },
 };
 
-// ============================================================
-// PIXEL PARTICLES (ambient background)
-// Small glowing pixels and code symbols floating up the room.
-// ============================================================
+// ── Pixel Particles ────────────────────────────────────────────
+// Ambient code symbols and pixel dots drifting upward in the background.
 const PixelParticles = {
-  canvas: null,
-  ctx:    null,
-  particles: [],
-  dots:   [],
-  animId: null,
-
-  SYMBOLS: ['{}', '01', '//', '()', '!=', '&&', '++', '[]', '??', '/*'],
+  canvas: null, ctx: null,
+  particles: [], dots: [], animId: null,
+  SYMBOLS: ['{}','01','//','()','!=','&&','++','[]','??','/*'],
 
   init() {
     this.canvas = document.getElementById('pixelCanvas');
     if (!this.canvas) return;
-
     const resize = () => {
       this.canvas.width  = this.canvas.offsetWidth;
       this.canvas.height = this.canvas.offsetHeight;
     };
     resize();
     window.addEventListener('resize', resize);
-
     this.ctx = this.canvas.getContext('2d');
-
-    // Create symbol particles
-    for (let i = 0; i < 18; i++) {
-      this.particles.push(this._makeParticle(true));
-    }
-    // Create pixel dots
-    for (let i = 0; i < 30; i++) {
-      this.dots.push(this._makeDot(true));
-    }
-
+    for (let i = 0; i < 18; i++) this.particles.push(this._makeParticle(true));
+    for (let i = 0; i < 30; i++) this.dots.push(this._makeDot(true));
     this._frame();
   },
 
   _makeParticle(initial = false) {
-    const c = this.canvas;
-    const roll = Math.random();
+    const c = this.canvas, roll = Math.random();
     return {
-      x:      Math.random() * c.width,
-      y:      initial ? Math.random() * c.height : c.height + 10,
-      speed:  0.15 + Math.random() * 0.35,
-      drift:  (Math.random() - 0.5) * 0.25,
+      x: Math.random() * c.width,
+      y: initial ? Math.random() * c.height : c.height + 10,
+      speed: 0.15 + Math.random() * 0.35, drift: (Math.random() - 0.5) * 0.25,
       symbol: this.SYMBOLS[Math.floor(Math.random() * this.SYMBOLS.length)],
-      alpha:  0.06 + Math.random() * 0.12,
-      size:   8 + Math.floor(Math.random() * 6),
-      color:  roll < 0.5 ? '#00e5ff' : roll < 0.85 ? '#39ff14' : '#ff2d78',
-      flicker: Math.random() > 0.6,
-      fSpeed:  0.025 + Math.random() * 0.05,
-      fPhase:  Math.random() * Math.PI * 2,
+      alpha: 0.06 + Math.random() * 0.12, size: 8 + Math.floor(Math.random() * 6),
+      color: roll < 0.5 ? '#00e5ff' : roll < 0.85 ? '#39ff14' : '#ff2d78',
+      flicker: Math.random() > 0.6, fSpeed: 0.025 + Math.random() * 0.05,
+      fPhase: Math.random() * Math.PI * 2,
     };
   },
 
   _makeDot(initial = false) {
     const c = this.canvas;
     return {
-      x:     Math.random() * c.width,
-      y:     initial ? Math.random() * c.height : c.height + 4,
-      size:  1 + Math.floor(Math.random() * 3),
+      x: Math.random() * c.width,
+      y: initial ? Math.random() * c.height : c.height + 4,
+      size: 1 + Math.floor(Math.random() * 3),
       speed: 0.3 + Math.random() * 0.6,
       alpha: 0.04 + Math.random() * 0.1,
       color: Math.random() < 0.6 ? '#00e5ff' : '#39ff14',
@@ -673,17 +579,13 @@ const PixelParticles = {
   },
 
   _frame() {
-    const ctx = this.ctx;
-    const c   = this.canvas;
+    const { ctx, canvas: c } = this;
     ctx.clearRect(0, 0, c.width, c.height);
-
     const t = Date.now() * 0.001;
 
-    // Draw dots
     this.dots.forEach(d => {
       d.y -= d.speed;
       if (d.y < -4) Object.assign(d, this._makeDot());
-
       ctx.save();
       ctx.globalAlpha = d.alpha;
       ctx.fillStyle   = d.color;
@@ -691,16 +593,10 @@ const PixelParticles = {
       ctx.restore();
     });
 
-    // Draw symbol particles
     this.particles.forEach(p => {
-      p.y -= p.speed;
-      p.x += p.drift;
+      p.y -= p.speed; p.x += p.drift;
       if (p.y < -20) Object.assign(p, this._makeParticle());
-
-      const alpha = p.flicker
-        ? p.alpha * (0.5 + 0.5 * Math.sin(t * p.fSpeed * 60 + p.fPhase))
-        : p.alpha;
-
+      const alpha = p.flicker ? p.alpha * (0.5 + 0.5 * Math.sin(t * p.fSpeed * 60 + p.fPhase)) : p.alpha;
       ctx.save();
       ctx.globalAlpha = alpha;
       ctx.fillStyle   = p.color;
@@ -714,88 +610,50 @@ const PixelParticles = {
   },
 };
 
-// ============================================================
-// ZONE CLICK HANDLERS
-// Clicking directly on the fridge/PC zone also triggers action.
-// ============================================================
+// ── Zone Click Handlers ────────────────────────────────────────
+// Clicking the fridge/PC zones in the room also triggers actions.
 function initZoneHandlers() {
-  const fridgeZone = document.getElementById('fridgeZone');
-  const pcZone     = document.getElementById('pcZone');
-
-  if (fridgeZone) {
-    fridgeZone.addEventListener('click', () => {
-      if (!ActionSystem.cooldowns['eat']) petAction('eat');
-    });
-  }
-
-  if (pcZone) {
-    pcZone.addEventListener('click', () => {
-      if (!ActionSystem.cooldowns['code']) petAction('code');
-    });
-  }
+  document.getElementById('fridgeZone')?.addEventListener('click', () => {
+    if (!ActionSystem.cooldowns['eat']) petAction('eat');
+  });
+  document.getElementById('pcZone')?.addEventListener('click', () => {
+    // PC zone click defaults to gaming if code is on cooldown
+    if (!ActionSystem.cooldowns['gaming'])     petAction('gaming');
+    else if (!ActionSystem.cooldowns['code'])  petAction('code');
+  });
 }
 
-// ============================================================
-// CLOCK TICKER
-// ============================================================
-setInterval(() => HUD.tickClock(), 1000);
-
-// ============================================================
-// AMBIENT SPEECH
-// ============================================================
+// ── Ambient Speech ─────────────────────────────────────────────
 const AMBIENT_LINES = [
-  "...still no job offers",
-  "i should refactor this",
-  "what is REST anyway",
-  "O(n^2) is fine, right?",
-  "Stack Overflow is a co-author",
-  "git blame: it was me",
-  "undefined... of course",
-  "please just work",
-  "one more energy drink",
-  "need more RAM",
+  "...still no job offers", "i should refactor this", "O(n^2) is fine, right?",
+  "Stack Overflow is a co-author", "git blame: it was me", "undefined... of course",
+  "please just work", "one more energy drink", "need more RAM",
 ];
 
 function scheduleAmbientSpeech() {
-  const delay = 12000 + Math.random() * 12000;
   setTimeout(() => {
     if (!DragHandler.isDragging && PetAnimator.currentState === 'idle') {
-      const line = AMBIENT_LINES[Math.floor(Math.random() * AMBIENT_LINES.length)];
-      PetAnimator.speak(line, 3000);
+      PetAnimator.speak(AMBIENT_LINES[Math.floor(Math.random() * AMBIENT_LINES.length)], 3000);
     }
     scheduleAmbientSpeech();
-  }, delay);
+  }, 12000 + Math.random() * 12000);
 }
 
-// ============================================================
-// MAIN GAME TICK
-// ============================================================
+// ── Main Tick ──────────────────────────────────────────────────
 function gameTick() {
   PetState.tick();
   HUD.update();
-
-  if (!DragHandler.isDragging && PetAnimator.currentState === 'idle') {
-    PetAnimator.autoSprite();
-  }
-
-  if (PetAnimator.currentState !== 'sleep') {
-    PetAnimator.showZzz(false);
-  }
-
+  if (!DragHandler.isDragging && PetAnimator.currentState === 'idle') PetAnimator.autoSprite();
+  if (PetAnimator.currentState !== 'sleep') PetAnimator.showZzz(false);
   const need = PetState.urgentNeed();
   if (need && !PetAnimator.speechEl?.classList.contains('visible')) {
-    const line = PetAnimator.randomSpeech(need) || 'help...';
-    PetAnimator.speak(line, 3500);
+    AudioSystem.play(need);
+    PetAnimator.speak(PetAnimator.randomSpeech(need) || 'help...', 3500);
   }
 }
 
-// ============================================================
-// GLOBAL FUNCTIONS (called by inline onclick attributes)
-// ============================================================
-function petAction(action) {
-  ActionSystem.trigger(action);
-}
-
+// ── Global onclick targets (used by game.html inline attributes) ──
+function petAction(action) { ActionSystem.trigger(action); }
 function dismissOverlay() {
   document.getElementById('statusOverlay').style.display = 'none';
   PetAnimator.showZzz(false);
@@ -803,21 +661,15 @@ function dismissOverlay() {
   PetWalker.resume();
 }
 
-// ============================================================
-// INIT
-// ============================================================
+// ── Init ───────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   HUD.update();
   PetWalker.init();
   DragHandler.init();
   PixelParticles.init();
   initZoneHandlers();
-
-  setInterval(gameTick, TICK_MS);
+  setInterval(gameTick,         TICK_MS);
+  setInterval(() => HUD.tickClock(), 1000);
   scheduleAmbientSpeech();
-
-  // Opening line
-  setTimeout(() => {
-    PetAnimator.speak("another day of debugging...", 3500);
-  }, 1500);
+  setTimeout(() => PetAnimator.speak("another day of debugging...", 3500), 1500);
 });

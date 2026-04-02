@@ -55,14 +55,14 @@ const ACTION_SPEECH = {
   eat:     ["om nom nom", "finally, real food", "Reese's Puffs Reese's Puffs Eat em up eat em up", "Im so chud coded"],
   drink:   ["cracking a cold one", "caffeine loading...", "I need this", "ooh it burns so good"],
   code:    ["it works??", "undefined :(", "just one more bug", "CTRL+Z CTRL+Z CTRL+Z"],
-  gaming:  ["one more game...", "LETS GOOO", "carried that match", "rank grind never stops", "ELO go brrr"],
-  workout: ["one more rep!!", "why am I doing this", "gains for the grind"],
-  sleep:   ["*snores in Python*", "finally...", "zzz zzz zzz"],
-  scared:  ["NOT THE JOB APP", "I need more internships", "BEHAVIORAL QUESTIONS NOOO"],
-  hungry:  ["feed me or I segfault", "my stomach is O(n) complaining", "bro. FOOD."],
-  thirsty: ["dehydrated dev detected", "no more coffee??"],
-  sleepy:  ["can't... keep... eyes... open", "just one more commit"],
-  idle:    ["...", "staring at the void", "rubber duck debugging", "git blame myself"],
+  gaming:  ["one more game...", "LETS GOOO", "Where your mom at?", "ye have fun back in the lobby", "womp womp"],
+  workout: ["one more rep!!", "Let that dog out!", "You're such a loser"],
+  sleep:   ["*dreams about crashing*", "the demons THE DEMONS!", "zzz zzz zzz"],
+  scared:  ["NOT THE JOB APP", "ITS REAL IT CANT HURT ME", "Im just gonna be homeless", "I should have been a nurse"],
+  hungry:  ["Momma gimme milk", "I hungy", "bro. FOOD."],
+  thirsty: ["*chapped lips smacking*", "Where my Coke ZERO???"],
+  sleepy:  ["can't... keep... eyes... open", "just one more minute of scrolling...", "I swear I'll go to bed early tonight like... 5 am?"],
+  idle:    ["...", "staring at the void", "Im not real", "I should see my gf", "IM SO BROKE"],
 };
 
 // Cooldown in ms per action (button is greyed out during cooldown)

@@ -1,56 +1,36 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>My Little Computer Science Amateur</title>
-  <link rel="stylesheet" href="css/title.css" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323:wght@400&display=swap" rel="stylesheet">
-</head>
-<body>
-  <div class="scanlines"></div>
-  <div class="crt-overlay"></div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JavaScript Mini Demo</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
 
-  <!-- Pixel ambient background canvas (replaces floating emoji decorations) -->
-  <canvas class="ambient-canvas" id="ambientCanvas"></canvas>
+    <h1>JavaScript Mini Demo</h1>
+    <p class="subtitle">COMP 484 — Homework 9</p>
 
-  <div class="title-screen">
+    <!-- Part 1: Date Display -->
+    <section class="card">
+      <h2>Date Display</h2>
+      <p id="dateOutput">Date will appear here</p>
+    </section>
 
-    <div class="title-container">
-      <div class="title-badge">TAMAGOTCHI-STYLE SIM</div>
+    <!-- Part 2: Number Conversion -->
+    <section class="card">
+      <h2>Number Conversion Tests</h2>
+      <div id="numberConversionOutput">Results will appear here</div>
+    </section>
 
-      <h1 class="game-title">
-        <span class="title-line1">My Little</span>
-        <span class="title-line2">Computer Science</span>
-        <span class="title-line3">Amateur</span>
-      </h1>
+    <!-- Part 3: Math & Formatting -->
+    <section class="card">
+      <h2>Math and Number Formatting</h2>
+      <div id="mathOutput">Results will appear here</div>
+    </section>
 
-      <div class="title-sprite-wrapper">
-        <img src="assets/sprites/EJ_idle.png" alt="CS Student" class="title-sprite" id="titleSprite" />
-        <div class="sprite-shadow"></div>
-        <div class="speech-bubble" id="speechBubble">
-          <span id="speechText">why won't it compile...</span>
-        </div>
-      </div>
+    <!-- Part 4 conditional messages are rendered inside the sections above via script.js -->
 
-      <button class="start-btn" id="startBtn" onclick="startGame()">
-        <span class="btn-text">▶ START GAME</span>
-        <span class="btn-blink">_</span>
-      </button>
-
-      <p class="press-start-hint blink">PRESS START TO ADOPT YOUR CS STUDENT</p>
-
-      <div class="bottom-credits">
-        <span>v1.0.0</span>
-        <span>•</span>
-        <span>COMP 484 EDITION</span>
-        <span>•</span>
-        <span>© 2025</span>
-      </div>
-    </div>
-  </div>
-
-  <script src="js/title.js"></script>
-</body>
+    <script src="script.js"></script>
+  </body>
 </html>

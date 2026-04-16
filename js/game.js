@@ -44,7 +44,7 @@ const SPRITES = {
   sleep:   'assets/sprites/EJ_sleep.png',
   sleepy:  'assets/sprites/EJ_sleepy.png',
   scared:  'assets/sprites/EJ_scared.png',
-  hungry:  'assets/sprites/EK_hungry.png',
+  hungry:  'assets/sprites/EJ_hungry.png',
   thirsty: 'assets/sprites/EJ_thirsty.png',
   pickup:  'assets/sprites/EJ_pickup.png',
   fall:    'assets/sprites/EJ_fall.png',
